@@ -1,1 +1,94 @@
-<h1>Hello World!</h1>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>拍手ページ</title>
+<style>
+body {
+  font-family: sans-serif;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: center;
+}
+
+img {
+  max-width: 100%;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+button {
+  padding: 12px 20px;
+  font-size: 18px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #ff87b7;
+  color: white;
+}
+button:hover {
+  opacity: 0.8;
+}
+
+textarea {
+  width: 100%;
+  height: 80px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.send-btn {
+  margin-top: 10px;
+  background: #6fa8ff;
+}
+
+#count {
+  margin-top: 15px;
+  font-size: 18px;
+  color: #333;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🎉 ありがとうページ 🎉</h2>
+
+<!-- ▼ お礼の画像（あなたの画像URLに変更してください） -->
+<img src="https://placehold.co/400x250?text=Here+Your+Image" alt="お礼イラスト">
+
+<!-- ▼ 拍手ボタン -->
+<button id="clapBtn">👏 拍手を送る</button>
+
+<p id="count">拍手数：0</p>
+
+<hr>
+
+<!-- ▼ メッセージフォーム（後ほど送信先を設定します） -->
+<h3>メッセージを送る</h3>
+<textarea id="message" placeholder="メッセージがあればどうぞ！"></textarea>
+<br>
+<button class="send-btn" id="sendMsgBtn">メッセージ送信</button>
+
+<script>
+// ───── 拍手カウントをローカルに保存（簡易版） ─────
+let clapCount = localStorage.getItem("clapCount") || 0;
+document.getElementById("count").textContent = "拍手数：" + clapCount;
+
+document.getElementById("clapBtn").onclick = () => {
+    clapCount++;
+    localStorage.setItem("clapCount", clapCount);
+    document.getElementById("count").textContent = "拍手数：" + clapCount;
+};
+
+// ───── メッセージ送信（簡易アラート版） ─────
+// ※ GitHub Pages はサーバーが無いので、送信システムは別途用意する必要があります。
+document.getElementById("sendMsgBtn").onclick = () => {
+    const msg = document.getElementById("message").value;
+    alert("メッセージを受け付けました！（実際の送信先は後で設定します）\n\n" + msg);
+};
+</script>
+
+</body>
+</html>
