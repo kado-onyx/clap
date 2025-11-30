@@ -21,7 +21,7 @@ body {
 }
 
 textarea {
-  width: 90%;
+  width: 50%;
   height: 80px;
   padding: 10px;
   margin-top: 10px;
@@ -82,7 +82,7 @@ button {
 
   const clapDocRef = doc(db, "claps", "main");
 
-  // ▼ 拍手処理（+1）
+  // ▼ 拍手 +1
   async function addClap() {
     const snap = await getDoc(clapDocRef);
     if (snap.exists()) {
@@ -92,21 +92,47 @@ button {
     }
   }
 
+  // ▼ ローカル連打カウンター・クールダウン機能
+  function canClapNow() {
+    const key = "clapCount";
+    const lastClapTimeKey = "lastClapTime";
+
+    let count = Number(localStorage.getItem(key) || 0);
+    let lastTime = Number(localStorage.getItem(lastClapTimeKey) || 0);
+    const now = Date.now();
+
+    if (count < 10) {
+      localStorage.setItem(key, count + 1);
+      return true;
+    }
+
+    if (now - lastTime >= 3000) {
+      localStorage.setItem(lastClapTimeKey, now);
+      return true;
+    }
+
+    return false;
+  }
+
   // ▼ 画像切替
   const images = ["1.png", "2.png", "3.png"];
   let idx = 0;
+
   function updateImage() {
     document.getElementById("main-image").src = images[idx];
     document.getElementById("page-num").textContent = `(${idx + 1}/3)`;
   }
 
-  // ▼ ボタンを押した時の処理
+  // ▼ メインボタン処理（拍手 + メッセージ + 次画像）
   document.getElementById("sendClapBtn").onclick = async () => {
 
-    // 1) メッセージを読み取る
+    if (!canClapNow()) {
+      alert("少し待ってください！");
+      return;
+    }
+
     const text = document.getElementById("message").value.trim();
 
-    // 2) 空でなければメッセージ保存
     if (text) {
       await addDoc(collection(db, "messages"), {
         text: text,
@@ -114,14 +140,11 @@ button {
       });
     }
 
-    // 3) 拍手を加算
     await addClap();
 
-    // 4) 画像を次へ
     idx = (idx + 1) % images.length;
     updateImage();
 
-    // 5) テキストフォームを空にする
     document.getElementById("message").value = "";
   };
 
