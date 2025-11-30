@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>管理者ページ</title>
+
+<style>
+body {
+  background: #222;
+  color: #fff;
+  font-family: sans-serif;
+  padding: 20px;
+}
+input {
+  padding: 8px;
+  width: 200px;
+  font-size: 16px;
+}
+button {
+  padding: 8px 16px;
+  margin-left: 10px;
+  font-size: 14px;
+}
+#content {
+  display: none;
+  margin-top: 20px;
+}
+.message-box {
+  background: #333;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>管理者ページ（メッセージ一覧＋拍手数）</h2>
+
+<p>パスワードを入力してください</p>
+<input type="password" id="pwInput">
+<button onclick="checkPW()">OK</button>
+
+<div id="content">
+  <h3>📬 直近1か月のメッセージ一覧</h3>
+  <div id="messages"></div>
+
+  <h3>👏 拍手数</h3>
+  <p id="clapCount">読み込み中…</p>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, getDoc, query, where, Timestamp }
+    from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
+    authDomain: "kado-onyx-clap.firebaseapp.com",
+    projectId: "kado-onyx-clap",
+    storageBucket: "kado-onyx-clap.firebasestorage.app",
+    messagingSenderId: "1038961543704",
+    appId: "1:1038961543704:web:114b43697f055c2f8f116d",
+    measurementId: "G-DH6JB7CKPV"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // ▼ パスワードチェック（簡易）
+  function checkPW() {
+    const input = document.getElementById("pwInput").value;
+    const correct = "onyx123"; // ←必要なら変更してOK
+
+    if (input === correct) {
+      document.getElementById("content").style.display = "block";
+      loadData();
+    } else {
+      alert("パスワードが違います");
+    }
+  }
+
+  // ▼ データ読み込み（メッセージ＋拍手）
+  async function loadData() {
+
+    // ▼ 直近1か月のメッセージ
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+    const q = query(
+      collection(db, "messages"),
+      where("timestamp", ">=", Timestamp.fromDate(oneMonthAgo))
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    const msgBox = document.getElementById("messages");
+    msgBox.innerHTML = "";
+
+    querySnapshot.forEach(doc => {
+      const d = doc.data();
+      const date = d.timestamp.toDate().toLocaleString("ja-JP");
+      msgBox.innerHTML += `
+        <div class="message-box">
+          <strong>📅 ${date}</strong><br>
+          ${d.text}
+        </div>
+      `;
+    });
+
+    if (querySnapshot.empty) {
+      msgBox.innerHTML = "<p>メッセージはありません。</p>";
+    }
+
+    // ▼ 拍手数
+    const clapSnap = await getDoc(doc(db, "claps", "main"));
+    if (clapSnap.exists()) {
+      document.getElementById("clapCount").textContent =
+        clapSnap.data().count + " 回";
+    } else {
+      document.getElementById("clapCount").textContent = "0 回";
+    }
+  }
+</script>
+
+</body>
+</html>
