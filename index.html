@@ -38,4 +38,98 @@ button {
   background-color: #282828;
   font-size: 16px;
   cursor: pointer;
-  color: #fff
+  color: #fff;
+}
+
+#page-num {
+  margin-top: 10px;
+  font-size: 18px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h2>☠拍手ありがとうございます👹</h2>
+
+<div id="image-box">
+  <img id="main-image" src="1.png" alt="お礼画像">
+</div>
+
+<div id="page-num">(1/3)</div>
+
+<textarea id="message" placeholder="ございましたら"></textarea><br>
+<button id="sendMsgBtn">送信</button>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc } 
+    from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
+    authDomain: "kado-onyx-clap.firebaseapp.com",
+    projectId: "kado-onyx-clap",
+    storageBucket: "kado-onyx-clap.firebasestorage.app",
+    messagingSenderId: "1038961543704",
+    appId: "1:1038961543704:web:114b43697f055c2f8f116d",
+    measurementId: "G-DH6JB7CKPV"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // ▼ 拍手の保存先
+  const clapDocRef = doc(db, "claps", "main");
+
+  // ▼ ページを開いた瞬間に +1
+  async function autoClap() {
+    const snap = await getDoc(clapDocRef);
+
+    if (snap.exists()) {
+      await updateDoc(clapDocRef, { count: snap.data().count + 1 });
+    } else {
+      await setDoc(clapDocRef, { count: 1 });
+    }
+  }
+
+  autoClap();
+
+  // ▼ メッセージ送信
+  document.getElementById("sendMsgBtn").onclick = async () => {
+    const text = document.getElementById("message").value.trim();
+    if (!text) {
+      alert("メッセージが空です！");
+      return;
+    }
+
+    await addDoc(collection(db, "messages"), {
+      text: text,
+      timestamp: new Date()
+    });
+
+    alert("送信しました！");
+    document.getElementById("message").value = "";
+  };
+
+  // ▼ お礼画像スライド機能
+  const images = ["1.png", "2.png", "3.png"];
+  let idx = 0;
+
+  function updateImage() {
+    document.getElementById("main-image").src = images[idx];
+    document.getElementById("page-num").textContent = `(${idx + 1}/3)`;
+  }
+
+  // クリックで次の画像へ
+  document.getElementById("main-image").onclick = () => {
+    idx = (idx + 1) % images.length;
+    updateImage();
+  };
+
+  updateImage();
+</script>
+
+</body>
+</html>
