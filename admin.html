@@ -103,6 +103,7 @@ button {
     querySnapshot.forEach(doc => {
       const d = doc.data();
       const date = d.timestamp.toDate().toLocaleString("ja-JP");
+      
      msgBox.innerHTML += `
   <div class="message-box" id="msg-${doc.id}">
     <strong>📅 ${date}</strong><br>
@@ -110,7 +111,6 @@ button {
     <br><br>
     <button onclick="savePNG('msg-${doc.id}', '${date}')">🖼 PNG保存</button>
   </div>
-`;
       `;
     });
 
