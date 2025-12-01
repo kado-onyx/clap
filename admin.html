@@ -103,11 +103,14 @@ button {
     querySnapshot.forEach(doc => {
       const d = doc.data();
       const date = d.timestamp.toDate().toLocaleString("ja-JP");
-      msgBox.innerHTML += `
-        <div class="message-box">
-          <strong>📅 ${date}</strong><br>
-          ${d.text}
-        </div>
+     msgBox.innerHTML += `
+  <div class="message-box" id="msg-${doc.id}">
+    <strong>📅 ${date}</strong><br>
+    ${d.text}
+    <br><br>
+    <button onclick="savePNG('msg-${doc.id}', '${date}')">🖼 PNG保存</button>
+  </div>
+`;
       `;
     });
 
@@ -125,6 +128,69 @@ button {
     }
   }
 
+</script>
+<script>
+// ▼ PNG保存（装飾フレーム付き & サイズ固定）
+function savePNG(elementId, dateText) {
+  const element = document.getElementById(elementId);
+
+  // ─────────────
+  //   1. html2canvas で要素を画像化
+  // ─────────────
+  html2canvas(element, { scale: 2 }).then(canvas => {
+
+    // ─────────────
+    //   2. 固定サイズのキャンバスを作成
+    // ─────────────
+    const W = 300;  // ← 最終画像の横幅
+    const H = 400;  // ← 最終画像の縦幅
+
+    const fixedCanvas = document.createElement("canvas");
+    fixedCanvas.width = W;
+    fixedCanvas.height = H;
+
+    const ctx = fixedCanvas.getContext("2d");
+
+    // ─────────────
+    //   3. 背景（フレーム用）
+    // ─────────────
+    ctx.fillStyle = "#faf5ff";     // ← 背景色（薄い紫など変更可）
+    ctx.fillRect(0, 0, W, H);
+
+    // 枠線（フレーム）
+    ctx.strokeStyle = "#9370db";   // ← フレームの色
+    ctx.lineWidth = 6;
+    ctx.strokeRect(5, 5, W - 10, H - 10);
+
+    // ─────────────
+    //   4. メッセージ画像を縮小して貼り付け
+    // ─────────────
+    const img = new Image();
+    img.onload = () => {
+      // キャンバス中央に配置
+      const padding = 20;
+      const contentW = W - padding * 2;
+      const contentH = H - padding * 2;
+
+      ctx.drawImage(img, padding, padding, contentW, contentH);
+
+      // ─────────────
+      //   5. ファイル名を「日付_message.png」にする
+      // ─────────────
+      const safeDate = dateText.replace(/[\/: ]/g, "-");
+      const filename = safeDate + "_message.png";
+
+      // ダウンロード
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = fixedCanvas.toDataURL("image/png");
+      link.click();
+    };
+
+    // html2canvas の結果を img に読み込み
+    img.src = canvas.toDataURL("image/png");
+  });
+}
 </script>
 
 </body>
