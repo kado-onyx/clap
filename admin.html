@@ -40,7 +40,7 @@ button {
 
 <p>パスワードを入力してください</p>
 <input type="password" id="pwInput">
-<button onclick="checkPW()">OK</button>
+<button id="pwBtn">OK</button>
 
 <div id="content">
   <h3>📬 直近1か月のメッセージ一覧</h3>
@@ -68,10 +68,10 @@ button {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // ▼ パスワードチェック（簡易）
+  // ▼ パスワードチェック
   function checkPW() {
     const input = document.getElementById("pwInput").value;
-    const correct = "onyx123"; // ←必要なら変更してOK
+    const correct = "onyx123";
 
     if (input === correct) {
       document.getElementById("content").style.display = "block";
@@ -81,10 +81,12 @@ button {
     }
   }
 
-  // ▼ データ読み込み（メッセージ＋拍手）
+  document.getElementById("pwBtn").onclick = checkPW;
+
+  // ▼ データ読み込み（メッセージ + 拍手）
   async function loadData() {
 
-    // ▼ 直近1か月のメッセージ
+    // ▼ 直近1か月
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
@@ -103,26 +105,4 @@ button {
       const date = d.timestamp.toDate().toLocaleString("ja-JP");
       msgBox.innerHTML += `
         <div class="message-box">
-          <strong>📅 ${date}</strong><br>
-          ${d.text}
-        </div>
-      `;
-    });
-
-    if (querySnapshot.empty) {
-      msgBox.innerHTML = "<p>メッセージはありません。</p>";
-    }
-
-    // ▼ 拍手数
-    const clapSnap = await getDoc(doc(db, "claps", "main"));
-    if (clapSnap.exists()) {
-      document.getElementById("clapCount").textContent =
-        clapSnap.data().count + " 回";
-    } else {
-      document.getElementById("clapCount").textContent = "0 回";
-    }
-  }
-</script>
-
-</body>
-</html>
+          <
