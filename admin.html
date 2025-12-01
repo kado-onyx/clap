@@ -133,68 +133,55 @@ button {
 
 </script>
 <script>
-// ▼ PNG保存（装飾フレーム付き & サイズ固定）
+// ▼ PNG保存（アスペクト比維持・横幅固定・縦は可変）
 function savePNG(elementId, dateText) {
   const element = document.getElementById(elementId);
 
-  // ─────────────
-  //   1. html2canvas で要素を画像化
-  // ─────────────
+  // ① 元の要素を撮影
   html2canvas(element, { scale: 2 }).then(canvas => {
 
-    // ─────────────
-    //   2. 固定サイズのキャンバスを作成
-    // ─────────────
-    const W = 300;  // ← 最終画像の横幅
-    const H = 400;  // ← 最終画像の縦幅
+    // 元画像の比率を保持しつつ横幅だけ固定
+    const FIXED_WIDTH = 600;  // ← PNGの横幅（自由に変更可）
+    const scale = FIXED_WIDTH / canvas.width;
+    const newHeight = canvas.height * scale;
 
+    // ② 新しいキャンバス（横固定・縦可変）
     const fixedCanvas = document.createElement("canvas");
-    fixedCanvas.width = W;
-    fixedCanvas.height = H;
+    fixedCanvas.width = FIXED_WIDTH;
+    fixedCanvas.height = newHeight;
 
     const ctx = fixedCanvas.getContext("2d");
 
     // ─────────────
-    //   3. 背景（フレーム用）
+    //   背景（フレーム）
     // ─────────────
-    ctx.fillStyle = "#faf5ff";     // ← 背景色（薄い紫など変更可）
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#faf5ff";     // 背景色
+    ctx.fillRect(0, 0, FIXED_WIDTH, newHeight);
 
-    // 枠線（フレーム）
-    ctx.strokeStyle = "#9370db";   // ← フレームの色
+    // フレーム線
+    ctx.strokeStyle = "#9370db";
     ctx.lineWidth = 6;
-    ctx.strokeRect(5, 5, W - 10, H - 10);
+    ctx.strokeRect(3, 3, FIXED_WIDTH - 6, newHeight - 6);
 
-    // ─────────────
-    //   4. メッセージ画像を縮小して貼り付け
-    // ─────────────
-    const img = new Image();
-    img.onload = () => {
-      // キャンバス中央に配置
-      const padding = 20;
-      const contentW = W - padding * 2;
-      const contentH = H - padding * 2;
+    // ③ 元のキャプチャ画像をリサイズして描画
+    ctx.drawImage(
+      canvas,
+      0, 0, canvas.width, canvas.height,
+      0, 0, FIXED_WIDTH, newHeight
+    );
 
-      ctx.drawImage(img, padding, padding, contentW, contentH);
+    // ④ ファイル名を「日付_message.png」にする
+    const safeDate = dateText.replace(/[\/: ]/g, "-");
+    const filename = safeDate + "_message.png";
 
-      // ─────────────
-      //   5. ファイル名を「日付_message.png」にする
-      // ─────────────
-      const safeDate = dateText.replace(/[\/: ]/g, "-");
-      const filename = safeDate + "_message.png";
-
-      // ダウンロード
-      const link = document.createElement("a");
-      link.download = filename;
-      link.href = fixedCanvas.toDataURL("image/png");
-      link.click();
-    };
-
-    // html2canvas の結果を img に読み込み
-    img.src = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = fixedCanvas.toDataURL("image/png");
+    link.click();
   });
 }
 </script>
+
 
 </body>
 </html>
