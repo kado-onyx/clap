@@ -105,4 +105,27 @@ button {
       const date = d.timestamp.toDate().toLocaleString("ja-JP");
       msgBox.innerHTML += `
         <div class="message-box">
-          <
+          <strong>📅 ${date}</strong><br>
+          ${d.text}
+        </div>
+      `;
+    });
+
+    if (querySnapshot.empty) {
+      msgBox.innerHTML = "<p>メッセージはありません。</p>";
+    }
+
+    // ▼ 拍手数
+    const clapSnap = await getDoc(doc(db, "claps", "main"));
+    if (clapSnap.exists()) {
+      document.getElementById("clapCount").textContent =
+        clapSnap.data().count + " 回";
+    } else {
+      document.getElementById("clapCount").textContent = "0 回";
+    }
+  }
+
+</script>
+
+</body>
+</html>
