@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>拍手ページ</title>
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 body {
   font-family: sans-serif;
@@ -13,13 +13,12 @@ body {
   text-align: center;
   color: #fff;
 }
-
+h2 { margin-top: 0; }
 #image-box img {
   max-width: 90%;
   margin: 20px auto;
   display: block;
 }
-
 textarea {
   width: 50%;
   height: 80px;
@@ -28,8 +27,8 @@ textarea {
   border-radius: 6px;
   border: none;
   font-size: 16px;
+  resize: vertical;
 }
-
 button {
   padding: 12px 22px;
   margin-top: 10px;
@@ -40,15 +39,18 @@ button {
   cursor: pointer;
   color: #fff;
 }
-
 #page-num {
   margin-top: 10px;
   font-size: 18px;
+  color: #000;
 }
-
+.footer-copy {
+  color: #000;
+  margin-top: 30px;
+  font-size: 14px;
+}
 </style>
 </head>
-
 <body>
 
 <h2 style="color:#000;">💀拍手ありがとうございます👹</h2>
@@ -62,11 +64,15 @@ button {
 <textarea id="message" placeholder="なにかございましたら"></textarea><br>
 <button id="sendClapBtn">送信</button>
 
+<p class="footer-copy">© 2021 yawaraka_doku_onyx All Rights Reserved.</p>
+
+<!-- Firebase SDK (module) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc } 
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } 
     from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
+  // --- あなたの Firebase 設定（そのまま） ---
   const firebaseConfig = {
     apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
     authDomain: "kado-onyx-clap.firebaseapp.com",
@@ -80,92 +86,103 @@ button {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  const clapDocRef = doc(db, "claps", "main");
+  // ---------------------------
+  // 画像配列（必要ならファイル名を変更）
+  // ---------------------------
+  const images = ["1.gif","2.png","3.png"];
+  let idx = 0;
 
-  // ▼ 拍手 +1
-  async function addClap() {
+  // ページ番号更新
+  function updateImage() {
+    const img = document.getElementById("main-image");
+    img.src = images[idx];
+    document.getElementById("page-num").textContent = `(${idx + 1}/${images.length})`;
+  }
+
+  // 画像を次へ（クリックや送信後に呼ぶ）
+  function nextImage() {
+    idx = (idx + 1) % images.length;
+    updateImage();
+  }
+
+  // ---------------------------
+  // 拍手処理：Firestore の claps/main の count を +1
+  // ---------------------------
+  const clapDocRef = doc(db, "claps", "main");
+  async function addClapToFirebase() {
     const snap = await getDoc(clapDocRef);
     if (snap.exists()) {
-      await updateDoc(clapDocRef, { count: snap.data().count + 1 });
+      await updateDoc(clapDocRef, { count: (snap.data().count || 0) + 1 });
     } else {
       await setDoc(clapDocRef, { count: 1 });
     }
   }
 
-  // ▼ ローカル連打カウンター・クールダウン機能
+  // ---------------------------
+  // 連打制御（15回までは即時許可）
+  // 実装方針：
+  // - rapidClicks: 現在のバースト残数（0..）
+  // - 最初は 0、クリックで++、クリック後に60秒で--（つまり 15回まで/分のバースト）
+  // - maxRapid = 15
+  // ---------------------------
+  let rapidClicks = 0;
+  const maxRapid = 15;
+
   function canClapNow() {
-    const key = "clapCount";
-    const lastClapTimeKey = "lastClapTime";
-
-    let count = Number(localStorage.getItem(key) || 0);
-    let lastTime = Number(localStorage.getItem(lastClapTimeKey) || 0);
-    const now = Date.now();
-
-    if (count < 10) {
-      localStorage.setItem(key, count + 1);
+    if (rapidClicks < maxRapid) {
+      rapidClicks++;
+      // 60秒後に1つ分回復
+      setTimeout(() => { rapidClicks = Math.max(0, rapidClicks - 1); }, 60000);
       return true;
     }
-
-    if (now - lastTime >= 3000) {
-      localStorage.setItem(lastClapTimeKey, now);
-      return true;
-    }
-
     return false;
   }
 
-  // ▼ 画像切替
-  const images = ["1.gif", "2.png", "3.png", "4.png"];
-  let idx = 0;
-
-function updateImage() {
-  const img = document.getElementById("thankImage");
-  img.src = images[currentIndex];
-
-  // ページ番号表示
-  const pageText = `${currentIndex + 1} / ${images.length}`;
-  document.getElementById("pageNumber").textContent = pageText;
-
-  // 次のページへ
-  currentIndex = (currentIndex + 1) % images.length;
-}
-
-  // ▼ メインボタン処理（拍手 + メッセージ + 次画像）
-document.getElementById("clapButton").addEventListener("click", async () => {
-
-  // 15回まではクールダウンなし
-  if (rapidClicks < maxRapid) {
-    rapidClicks++;
-  } else {
-    alert("おちついてください");
-    return;
-  }
-
-  // 拍手処理
-  await addClapToFirebase(); // ←あなたの既存の拍手カウント処理
-  updateImage();
-
-  // 60秒で連打回数リセット（自由に変更可）
-  setTimeout(() => {
-    rapidClicks = 0;
-  }, 60000);
-});
-
+  // ---------------------------
+  // メインボタン処理
+  // ---------------------------
+  document.getElementById("sendClapBtn").addEventListener("click", async () => {
+    // 連打制御（15回超過したら警告）
+    if (!canClapNow()) {
+      alert("おちついてください");
+      return;
     }
 
-    await addClap();
+    const text = document.getElementById("message").value.trim();
 
-    idx = (idx + 1) % images.length;
-    updateImage();
+    // メッセージ保存（空なら保存しない）
+    if (text) {
+      try {
+        await addDoc(collection(db, "messages"), {
+          text: text,
+          timestamp: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("メッセージ保存エラー", e);
+      }
+    }
 
+    // 拍手カウントを +1
+    try {
+      await addClapToFirebase();
+    } catch (e) {
+      console.error("拍手保存エラー", e);
+    }
+
+    // 画像を次へ
+    nextImage();
+
+    // フォームをクリア
     document.getElementById("message").value = "";
-  };
+  });
 
+  // 画像クリックでも次ページへ（任意）
+  document.getElementById("main-image").addEventListener("click", () => {
+    nextImage();
+  });
+
+  // 初期表示
   updateImage();
 </script>
-
 </body>
 </html>
-<p style="color:#000; margin-top:30px; font-size:14px;">
-© 2021 yawaraka_doku_onyx All Rights Reserved.
-</p>
