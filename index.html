@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="favicon.png">
+
 <style>
 body {
   font-family: sans-serif;
@@ -15,12 +16,14 @@ body {
   text-align: center;
   color: #fff;
 }
-h2 { margin-top: 0; }
+h2 { margin-top: 0; color:#000; }
+
 #image-box img {
   max-width: 90%;
   margin: 20px auto;
   display: block;
 }
+
 textarea {
   width: 50%;
   height: 80px;
@@ -31,6 +34,7 @@ textarea {
   font-size: 16px;
   resize: vertical;
 }
+
 button {
   padding: 12px 22px;
   margin-top: 10px;
@@ -41,11 +45,13 @@ button {
   cursor: pointer;
   color: #fff;
 }
+
 #page-num {
   margin-top: 10px;
   font-size: 18px;
   color: #000;
 }
+
 .footer-copy {
   color: #000;
   margin-top: 30px;
@@ -53,28 +59,31 @@ button {
 }
 </style>
 </head>
+
 <body>
 
-<h2 style="color:#000;">💀拍手ありがとうございます👹</h2>
+<h2>💀拍手ありがとうございます👹</h2>
 
 <div id="image-box">
-  <img id="main-image" src="1.png" alt="お礼画像">
+  <img id="main-image" src="1_v2.gif" alt="お礼画像">
 </div>
 
-<div id="page-num">(1/3)</div>
+<div id="page-num">(1/4)</div>
 
 <textarea id="message" placeholder="なにかございましたら"></textarea><br>
 <button id="sendClapBtn">送信</button>
 
 <p class="footer-copy">© 2021 yawaraka_doku_onyx All Rights Reserved.</p>
 
-<!-- Firebase SDK (module) -->
+<!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } 
-    from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, updateDoc,
+    collection, addDoc, serverTimestamp, increment
+  } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  // --- あなたの Firebase 設定（そのまま） ---
+  // --- Firebase設定 ---
   const firebaseConfig = {
     apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
     authDomain: "kado-onyx-clap.firebaseapp.com",
@@ -88,29 +97,94 @@ button {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // ---------------------------
-  // 画像配列（必要ならファイル名を変更）
-  // ---------------------------
+  // ============================================================
+  // (A) 日付キー・時間キー作成（C案）
+  // ============================================================
+  function getTodayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${("0"+(d.getMonth()+1)).slice(-2)}-${("0"+d.getDate()).slice(-2)}`;
+  }
+  function getCurrentHour() {
+    return new Date().getHours().toString();
+  }
+
+  // ============================================================
+  // (B) 拍手の時間別集計保存
+  // ============================================================
+  async function addClapHourly() {
+    const today = getTodayKey();
+    const hour = getCurrentHour();
+
+    const ref = doc(db, "clap_stats", today);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      const base = {};
+      for (let i = 0; i < 24; i++) base[i] = 0;
+
+      await setDoc(ref, {
+        ...base,
+        total: 1,
+        [hour]: 1
+      });
+    } else {
+      await updateDoc(ref, {
+        total: increment(1),
+        [hour]: increment(1)
+      });
+    }
+  }
+
+  // ============================================================
+  // (C) 訪問の時間別集計保存（ページ読み込み時）
+  // ============================================================
+  async function addVisitHourly() {
+    const today = getTodayKey();
+    const hour = getCurrentHour();
+
+    const ref = doc(db, "visit_stats", today);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      const base = {};
+      for (let i = 0; i < 24; i++) base[i] = 0;
+      await setDoc(ref, {
+        ...base,
+        total: 1,
+        [hour]: 1
+      });
+    } else {
+      await updateDoc(ref, {
+        total: increment(1),
+        [hour]: increment(1)
+      });
+    }
+  }
+
+  // ページ訪問時カウント
+  addVisitHourly();
+
+  // ============================================================
+  // (D) お礼画像（ページ送り）
+  // ============================================================
   const images = ["1_v2.gif","2.png","3.png","4.png"];
   let idx = 0;
 
-  // ページ番号更新
   function updateImage() {
-    const img = document.getElementById("main-image");
-    img.src = images[idx];
-    document.getElementById("page-num").textContent = `(${idx + 1}/${images.length})`;
+    document.getElementById("main-image").src = images[idx];
+    document.getElementById("page-num").textContent = `(${idx+1}/${images.length})`;
   }
 
-  // 画像を次へ（クリックや送信後に呼ぶ）
   function nextImage() {
     idx = (idx + 1) % images.length;
     updateImage();
   }
 
-  // ---------------------------
-  // 拍手処理：Firestore の claps/main の count を +1
-  // ---------------------------
+  // ============================================================
+  // (E) 拍手カウント（総数）
+  // ============================================================
   const clapDocRef = doc(db, "claps", "main");
+
   async function addClapToFirebase() {
     const snap = await getDoc(clapDocRef);
     if (snap.exists()) {
@@ -120,31 +194,28 @@ button {
     }
   }
 
-  // ---------------------------
-  // 連打制御（15回までは即時許可）
-  // 実装方針：
-  // - rapidClicks: 現在のバースト残数（0..）
-  // - 最初は 0、クリックで++、クリック後に60秒で--（つまり 15回まで/分のバースト）
-  // - maxRapid = 15
-  // ---------------------------
+  // ============================================================
+  // (F) 連打制御（15回まで即時OK）
+  // ============================================================
   let rapidClicks = 0;
   const maxRapid = 15;
 
   function canClapNow() {
     if (rapidClicks < maxRapid) {
       rapidClicks++;
-      // 60秒後に1つ分回復
-      setTimeout(() => { rapidClicks = Math.max(0, rapidClicks - 1); }, 60000);
+      setTimeout(() => {
+        rapidClicks = Math.max(0, rapidClicks - 1);
+      }, 60000);
       return true;
     }
     return false;
   }
 
-  // ---------------------------
-  // メインボタン処理
-  // ---------------------------
+  // ============================================================
+  // (G) メイン処理（送信ボタン）
+  // ============================================================
   document.getElementById("sendClapBtn").addEventListener("click", async () => {
-    // 連打制御（15回超過したら警告）
+
     if (!canClapNow()) {
       alert("おちついてください");
       return;
@@ -152,36 +223,26 @@ button {
 
     const text = document.getElementById("message").value.trim();
 
-    // メッセージ保存（空なら保存しない）
+    // メッセージ保存
     if (text) {
-      try {
-        await addDoc(collection(db, "messages"), {
-          text: text,
-          timestamp: serverTimestamp()
-        });
-      } catch (e) {
-        console.error("メッセージ保存エラー", e);
-      }
+      await addDoc(collection(db, "messages"), {
+        text: text,
+        timestamp: serverTimestamp()
+      });
     }
 
-    // 拍手カウントを +1
-    try {
-      await addClapToFirebase();
-    } catch (e) {
-      console.error("拍手保存エラー", e);
-    }
+    // 拍手の総数 +1
+    await addClapToFirebase();
 
-    // 画像を次へ
+    // 拍手を時間別 +1
+    await addClapHourly();
+
     nextImage();
-
-    // フォームをクリア
     document.getElementById("message").value = "";
   });
 
-  // 画像クリックでも次ページへ（任意）
-  document.getElementById("main-image").addEventListener("click", () => {
-    nextImage();
-  });
+  // 画像クリックでもページ送り
+  document.getElementById("main-image").addEventListener("click", nextImage);
 
   // 初期表示
   updateImage();
