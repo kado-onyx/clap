@@ -133,52 +133,103 @@ button {
 
 </script>
 <script>
-// ▼ PNG保存（アスペクト比維持・横幅固定・縦は可変）
-function savePNG(elementId, dateText) {
-  const element = document.getElementById(elementId);
+// =============================
+// PNG 生成用（frame.png 使用）
+// =============================
+async function saveMessageAsPng(dateStr, messageText) {
+    const frameImg = new Image();
+    frameImg.src = "frame.png"; // 320×128 の画像
+    await frameImg.decode();
 
-  // ① 元の要素を撮影
-  html2canvas(element, { scale: 2 }).then(canvas => {
+    const baseWidth = 320;
+    const frameHeight = frameImg.height; // 128px
 
-    // 元画像の比率を保持しつつ横幅だけ固定
-    const FIXED_WIDTH = 600;  // ← PNGの横幅（自由に変更可）
-    const scale = FIXED_WIDTH / canvas.width;
-    const newHeight = canvas.height * scale;
+    // キャンバス作成（まずは最低サイズ）
+    let canvas = document.createElement("canvas");
+    canvas.width = baseWidth;
+    canvas.height = frameHeight;
+    let ctx = canvas.getContext("2d");
 
-    // ② 新しいキャンバス（横固定・縦可変）
-    const fixedCanvas = document.createElement("canvas");
-    fixedCanvas.width = FIXED_WIDTH;
-    fixedCanvas.height = newHeight;
+    // アンチエイリアスをOFF（ドット感を残す）
+    ctx.imageSmoothingEnabled = false;
 
-    const ctx = fixedCanvas.getContext("2d");
+    // --- 基本のフレーム描画 ---
+    ctx.drawImage(frameImg, 0, 0);
 
-    // ─────────────
-    //   背景（フレーム）
-    // ─────────────
-    ctx.fillStyle = "#faf5ff";     // 背景色
-    ctx.fillRect(0, 0, FIXED_WIDTH, newHeight);
+    // --- フォント設定（ドット調・アンチエイリアスなし）---
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "top";
 
-    // フレーム線
-    ctx.strokeStyle = "#9370db";
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, FIXED_WIDTH - 6, newHeight - 6);
+    // ---- 日付 ----
+    const dateX = 21;
+    const dateY = 32;
+    ctx.fillText(dateStr, dateX, dateY);
 
-    // ③ 元のキャプチャ画像をリサイズして描画
-    ctx.drawImage(
-      canvas,
-      0, 0, canvas.width, canvas.height,
-      0, 0, FIXED_WIDTH, newHeight
-    );
+    // ---- メッセージ ----
+    const msgX = 21;
+    let msgY = dateY + 18; // 日付の下から書き始める
 
-    // ④ ファイル名を「日付_message.png」にする
-    const safeDate = dateText.replace(/[\/: ]/g, "-");
-    const filename = safeDate + "_message.png";
+    const maxWidth = 320 - 40; // 左右21px くらいの余白確保
 
+    // 行分割処理
+    const lines = wrapText(ctx, messageText, maxWidth);
+
+    // 必要な高さを計算（行数によって可変）
+    const lineHeight = 16; // 12pxフォント × 行間
+    const neededHeight = msgY + lines.length * lineHeight + 20;
+
+    if (neededHeight > frameHeight) {
+        // キャンバスを伸ばす（下方向）
+        const newCanvas = document.createElement("canvas");
+        newCanvas.width = baseWidth;
+        newCanvas.height = neededHeight;
+        const newCtx = newCanvas.getContext("2d");
+        newCtx.imageSmoothingEnabled = false;
+
+        // 上部フレームを描画
+        newCtx.drawImage(canvas, 0, 0);
+
+        // 下部スペースを黒背景で塗りつぶし
+        newCtx.fillStyle = "#000000";
+        newCtx.fillRect(0, frameHeight, baseWidth, neededHeight - frameHeight);
+
+        ctx = newCtx;
+        canvas = newCanvas;
+    }
+
+    // メッセージ描画
+    lines.forEach(line => {
+        ctx.fillText(line, msgX, msgY);
+        msgY += lineHeight;
+    });
+
+    // PNG保存
     const link = document.createElement("a");
-    link.download = filename;
-    link.href = fixedCanvas.toDataURL("image/png");
+    link.download = `${dateStr.replace(/\//g,"-")}_message.png`;
+    link.href = canvas.toDataURL("image/png");
     link.click();
-  });
+}
+
+// =============================
+// 行分割（折り返し）
+// =============================
+function wrapText(ctx, text, maxWidth) {
+    const words = text.split("");
+    let line = "";
+    let lines = [];
+
+    for (let char of words) {
+        const test = line + char;
+        if (ctx.measureText(test).width > maxWidth) {
+            lines.push(line);
+            line = char;
+        } else {
+            line = test;
+        }
+    }
+    if (line) lines.push(line);
+    return lines;
 }
 </script>
 
