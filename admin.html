@@ -2,211 +2,267 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>管理画面</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<title>管理者ページ — 拍手 & 訪問管理</title>
 
 <style>
-body {
-  font-family: monospace; /* ←標準フォント */
-  background-color: #000;
-  color: #c490ff;
-  padding: 20px;
+:root{
+  --bg:#0b0b0b;
+  --panel:#111;
+  --accent:#9370db; /* 紫 */
+  --muted:#bfb2e6;
+  --text:#efe8ff;
 }
-
-/* --- ボックス --- */
-.box {
-  border: 2px solid #a060ff;
-  padding: 15px;
-  margin-bottom: 25px;
-  border-radius: 6px;
+html,body{height:100%;}
+body{
+  margin:0; padding:24px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background:var(--bg); color:var(--text);
 }
-
-/* --- メッセージ一覧 --- */
-.msg-item {
-  border-bottom: 1px solid #444;
-  padding: 10px 0;
-}
-
-/* PNG保存用キャンバスは非表示でOK */
-#canvas {
-  display: none;
-}
+.container{max-width:980px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:20px;margin:0;color:var(--muted)}
+.pw-area{margin-top:18px}
+.input-inline{display:flex;gap:8px}
+input[type=password]{padding:8px;border-radius:6px;border:1px solid #222;background:#111;color:var(--text)}
+button{background:var(--accent);color:#111;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+#content{display:none;margin-top:22px}
+.panel{background:var(--panel);padding:12px;border-radius:8px;margin-bottom:14px;border:1px solid rgba(147,112,219,0.12)}
+.panel h2{margin:0 0 8px 0;color:var(--muted);font-size:15px}
+.row{display:flex;gap:12px}
+.col{flex:1}
+.hour-line{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,0.02)}
+.hour-label{width:48px;color:#cfc9e9}
+.bar{background:linear-gradient(90deg,var(--accent),#c9a3ff);height:12px;border-radius:6px}
+.small{font-size:13px;color:#d9cfee}
+.table-list{font-family:monospace;background:#0f0f0f;padding:8px;border-radius:6px}
+.footer{margin-top:18px;color:#9f8fd6;font-size:13px}
+.search-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.legend{font-size:13px;color:#b8aee7}
+@media(max-width:720px){.row{flex-direction:column}.hour-label{width:40px}}
 </style>
+
 </head>
-
 <body>
+<div class="container">
+  <div class="header">
+    <h1>管理者ページ — 拍手 / 訪問 管理（黒×紫テーマ）</h1>
+    <div class="legend">簡易表示（数値＋テキストバー）</div>
+  </div>
 
-<h1>📊 管理画面（拍手・訪問・メッセージ）</h1>
+  <div class="pw-area panel">
+    <div class="input-inline">
+      <input type="password" id="pwInput" placeholder="パスワードを入力">
+      <button id="pwBtn">ログイン</button>
+      <span class="small">※ 簡易保護（変更可）</span>
+    </div>
+    <div id="loginHint" class="small" style="margin-top:8px;color:#c6b9e9">ログイン後にデータを読み込みます。</div>
+  </div>
 
+  <div id="content">
 
-<!-- ■■■ 拍手 & 訪問数表示 ■■■ -->
-<div class="box">
-  <h2>📈 今日のカウント</h2>
-  <p>本日の訪問数：<span id="visitToday">0</span></p>
-  <p>本日の拍手数：<span id="clapToday">0</span></p>
+    <div class="panel">
+      <h2>本日（時間別）</h2>
+      <div class="row">
+        <div class="col" id="todayClapsPanel">
+          <h3 class="small">拍手（本日）</h3>
+          <div id="todayClaps" class="table-list"></div>
+        </div>
+        <div class="col" id="todayVisitsPanel">
+          <h3 class="small">訪問（本日）</h3>
+          <div id="todayVisits" class="table-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>直近14日（合計一覧）</h2>
+      <div id="last14" class="table-list small"></div>
+    </div>
+
+    <div class="panel">
+      <h2>当月集計（合算）</h2>
+      <div id="monthly" class="table-list small"></div>
+    </div>
+
+    <div class="panel">
+      <h2>メッセージ一覧（直近1か月）</h2>
+      <div id="messagesList"></div>
+    </div>
+
+    <div class="footer">データは Firestore の clap_stats / visit_stats / messages / claps を参照しています。</div>
+  </div>
 </div>
 
-
-<!-- ■■■ メッセージ一覧 ■■■ -->
-<div class="box">
-  <h2>💬 メッセージ一覧</h2>
-  <div id="messageList"></div>
-</div>
-
-
-<!-- PNG 保存のためのキャンバス -->
-<canvas id="canvas"></canvas>
-
-
-<!-- Firebase SDK -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import { 
-  getFirestore, collection, getDocs, doc, getDoc 
-} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+  // Firebase SDK imports
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-// --- Firebase設定 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
-  authDomain: "kado-onyx-clap.firebaseapp.com",
-  projectId: "kado-onyx-clap",
-  storageBucket: "kado-onyx-clap.firebasestorage.app",
-  messagingSenderId: "1038961543704",
-  appId: "1:1038961543704:web:114b43697f055c2f8f116d"
-};
+  // --- Firebase 設定（既存プロジェクト）
+  const firebaseConfig = {
+    apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
+    authDomain: "kado-onyx-clap.firebaseapp.com",
+    projectId: "kado-onyx-clap",
+    storageBucket: "kado-onyx-clap.firebasestorage.app",
+    messagingSenderId: "1038961543704",
+    appId: "1:1038961543704:web:114b43697f055c2f8f116d",
+    measurementId: "G-DH6JB7CKPV"
+  };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
+  // ---------- ユーティリティ ----------
+  function pad(n){return ("0"+n).slice(-2);} 
+  function todayKey(d=new Date()){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+  function hourStr(d=new Date()){return String(d.getHours());}
 
-// ----------------------------
-// 今日の訪問数・拍手数を取得
-// ----------------------------
-async function loadCounts() {
-  const today = new Date().toISOString().slice(0,10);
-  const ref = doc(db, "daily", today);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
-    document.getElementById("visitToday").textContent = data.visits ?? 0;
-    document.getElementById("clapToday").textContent = data.claps ?? 0;
-  }
-}
+  // ---------- DOM 要素 ----------
+  const pwBtn = document.getElementById('pwBtn');
+  const pwInput = document.getElementById('pwInput');
+  const content = document.getElementById('content');
+  const todayClapsEl = document.getElementById('todayClaps');
+  const todayVisitsEl = document.getElementById('todayVisits');
+  const last14El = document.getElementById('last14');
+  const monthlyEl = document.getElementById('monthly');
+  const messagesListEl = document.getElementById('messagesList');
 
+  // 簡易パスワード（必要なら変更してください）
+  const ADMIN_PW = 'onyx123';
 
-// ----------------------------
-// メッセージ一覧を表示
-// ----------------------------
-async function loadMessages() {
-  const msgBox = document.getElementById("messageList");
-  msgBox.innerHTML = "";
+  pwBtn.onclick = async () => {
+    if(pwInput.value === ADMIN_PW){
+      pwInput.value='';
+      content.style.display='block';
+      document.getElementById('loginHint').textContent = '読み込み中…';
+      await loadAll();
+    } else { alert('パスワードが違います'); }
+  };
 
-  const querySnapshot = await getDocs(collection(db, "messages"));
-  let list = [];
-
-  querySnapshot.forEach(doc => {
-    const d = doc.data();
-    list.push({
-      text: d.text,
-      time: d.timestamp ? d.timestamp.toDate() : new Date(0)
-    });
-  });
-
-  // 新しい順
-  list.sort((a,b) => b.time - a.time);
-
-  list.forEach(msg => {
-    const div = document.createElement("div");
-    div.className = "msg-item";
-
-    const dateStr = msg.time.toLocaleString("ja-JP");
-
-    div.innerHTML = `
-      <div><b>${dateStr}</b></div>
-      <div>${msg.text}</div>
-      <button onclick="savePNG('${dateStr.replace(/[- :]/g,'_')}', \`${msg.text}\`)">PNG保存</button>
-    `;
-
-    msgBox.appendChild(div);
-  });
-}
-
-
-// ----------------------------
-// PNG生成処理（frame.png + 文字）
-// ----------------------------
-window.savePNG = async function(dateStr, message) {
-  const frame = new Image();
-  frame.src = "frame.png";
-
-  await frame.decode(); // 読み込み
-
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-
-  // 基本サイズ
-  const width = 320;
-  let height = 128; // 基本サイズ
-
-  // メッセージの文字折り返し
-  ctx.font = "12px monospace";
-  const lines = wrapText(ctx, message, 280);
-  height = 80 + lines.length * 16;  // 高さ調整
-
-  canvas.width = width;
-  canvas.height = height;
-
-  // 黒背景
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0,0,width,height);
-
-  // フレーム描画（上に固定）
-  ctx.drawImage(frame, 0, 0, width, 128);
-
-  // 日付
-  ctx.fillStyle = "#fff";
-  ctx.font = "12px monospace";
-  ctx.fillText(dateStr, 21, 32);
-
-  // メッセージ（折り返し）
-  let y = 60;
-  for (let line of lines) {
-    ctx.fillText(line, 21, y);
-    y += 16;
+  // ---------- データ読み込み ----------
+  async function loadAll(){
+    await Promise.all([
+      loadTodayStats(),
+      loadLast14(),
+      loadMonthly(),
+      loadMessages()
+    ]);
+    document.getElementById('loginHint').textContent = '読み込み完了';
   }
 
-  // 保存
-  const a = document.createElement("a");
-  a.href = canvas.toDataURL("image/png");
-  a.download = `${dateStr}_message.png`;
-  a.click();
-};
+  // 今日の時間別を表示（拍手）
+  async function loadTodayStats(){
+    const key = todayKey();
+    const clapRef = doc(db,'clap_stats', key);
+    const visitRef = doc(db,'visit_stats', key);
 
+    const [clapSnap, visitSnap] = await Promise.all([getDoc(clapRef), getDoc(visitRef)]);
 
-// 文字折り返しヘルパー
-function wrapText(ctx, text, maxWidth) {
-  const words = text.split("");
-  let lines = [];
-  let current = "";
+    renderHourlyTable(clapSnap, todayClapsEl, '拍手');
+    renderHourlyTable(visitSnap, todayVisitsEl, '訪問');
+  }
 
-  for (let ch of words) {
-    if (ctx.measureText(current + ch).width > maxWidth) {
-      lines.push(current);
-      current = ch;
-    } else {
-      current += ch;
+  function renderHourlyTable(snap, container, label){
+    container.innerHTML='';
+    const maxBarWidth = 200; // px
+    let maxVal = 0;
+    const data = {}; for(let i=0;i<24;i++) data[i]=0;
+    let total = 0;
+    if(snap && snap.exists()){
+      const d = snap.data();
+      for(let i=0;i<24;i++){ if(d[i]) data[i]=d[i]; }
+      total = d.total||0;
+      // get max
+      for(let i=0;i<24;i++) if(data[i]>maxVal) maxVal=data[i];
     }
+    // build DOM
+    for(let i=0;i<24;i++){
+      const line = document.createElement('div');
+      line.className='hour-line';
+      const lbl = document.createElement('div'); lbl.className='hour-label'; lbl.textContent = pad(i)+':00';
+      const barWrap = document.createElement('div'); barWrap.style.flex='1';
+      const barInner = document.createElement('div');
+      const val = data[i]||0;
+      const width = maxVal? Math.round((val/maxVal)*maxBarWidth) : 0;
+      barInner.style.width = width+'px';
+      barInner.className='bar';
+      barInner.title = String(val);
+      const num = document.createElement('div'); num.style.minWidth='42px'; num.style.textAlign='right'; num.style.color='#dcd1ff'; num.textContent = val;
+      barWrap.appendChild(barInner);
+      line.appendChild(lbl);
+      line.appendChild(barWrap);
+      line.appendChild(num);
+      container.appendChild(line);
+    }
+    const tot = document.createElement('div'); tot.className='small'; tot.style.marginTop='8px'; tot.textContent = '合計: '+total;
+    container.appendChild(tot);
   }
-  if (current) lines.push(current);
 
-  return lines;
-}
+  // 直近 14 日の一覧
+  async function loadLast14(){
+    last14El.innerHTML='読み込み中…';
+    const rows = [];
+    for(let i=13;i>=0;i--){
+      const d = new Date(); d.setDate(d.getDate()-i);
+      const key = todayKey(d);
+      const snap = await getDoc(doc(db,'clap_stats', key));
+      const vsnap = await getDoc(doc(db,'visit_stats', key));
+      const clapTotal = snap && snap.exists() ? (snap.data().total||0):0;
+      const visitTotal = vsnap && vsnap.exists() ? (vsnap.data().total||0):0;
+      rows.push({key,clap:clapTotal,visit:visitTotal});
+    }
+    // render
+    last14El.innerHTML = '';
+    rows.forEach(r=>{
+      const el = document.createElement('div'); el.textContent = `${r.key} 　拍手:${r.clap}　 訪問:${r.visit}`;
+      last14El.appendChild(el);
+    });
+  }
 
+  // 当月集計（当月の1日〜本日までの合計を読み込み）
+  async function loadMonthly(){
+    monthlyEl.innerHTML='読み込み中…';
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    let clapSum = 0, visitSum=0;
+    for(let d=1; d<=daysInMonth; d++){
+      const dt = new Date(year, month, d);
+      if(dt>now) break;
+      const key = todayKey(dt);
+      const snap = await getDoc(doc(db,'clap_stats', key));
+      const vsnap = await getDoc(doc(db,'visit_stats', key));
+      if(snap && snap.exists()) clapSum += (snap.data().total||0);
+      if(vsnap && vsnap.exists()) visitSum += (vsnap.data().total||0);
+    }
+    monthlyEl.innerHTML = `今月合計 — 拍手: ${clapSum} ／ 訪問: ${visitSum}`;
+  }
 
-// 初期ロード
-loadCounts();
-loadMessages();
+  // メッセージ一覧（直近1か月）
+  async function loadMessages(){
+    messagesListEl.innerHTML='読み込み中…';
+    const oneMonthAgo = new Date(); oneMonthAgo.setMonth(oneMonthAgo.getMonth()-1);
+    const q = query(collection(db,'messages'), where('timestamp','>=', new Date(oneMonthAgo.getTime())), orderBy('timestamp','desc'));
+    // Firestore JS SDK doesn't allow mixing where with Date object directly in compat-less; we will simply fetch recent docs and filter client-side as fallback
+    // Simpler: fetch limit 100 and filter
+    const snaps = await getDocs(query(collection(db,'messages'), orderBy('timestamp','desc'), limit(100)));
+    messagesListEl.innerHTML='';
+    snaps.forEach(s=>{
+      const d = s.data();
+      if(!d.timestamp) return;
+      const ts = d.timestamp.toDate ? d.timestamp.toDate() : new Date(d.timestamp.seconds*1000);
+      if(ts < oneMonthAgo) return;
+      const box = document.createElement('div'); box.className='panel small';
+      box.style.background='#0f0f0f'; box.style.padding='8px'; box.style.marginBottom='8px';
+      box.innerHTML = `<div style="font-size:13px;color:#cfc3f0">${ts.toLocaleString()}</div><div style="margin-top:6px;color:#fff">${escapeHtml(d.text)}</div>`;
+      messagesListEl.appendChild(box);
+    });
+    if(messagesListEl.innerHTML==='') messagesListEl.innerHTML='<div class="small">メッセージはありません。</div>';
+  }
+
+  function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>\"]/, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
 </script>
-
 </body>
 </html>
