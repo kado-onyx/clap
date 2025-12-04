@@ -2,237 +2,211 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>管理者ページ</title>
+<title>管理画面</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
 <style>
 body {
-  background: #222;
-  color: #fff;
-  font-family: sans-serif;
+  font-family: monospace; /* ←標準フォント */
+  background-color: #000;
+  color: #c490ff;
   padding: 20px;
 }
-input {
-  padding: 8px;
-  width: 200px;
-  font-size: 16px;
-}
-button {
-  padding: 8px 16px;
-  margin-left: 10px;
-  font-size: 14px;
-}
-#content {
-  display: none;
-  margin-top: 20px;
-}
-.message-box {
-  background: #333;
-  padding: 12px;
-  margin-bottom: 10px;
+
+/* --- ボックス --- */
+.box {
+  border: 2px solid #a060ff;
+  padding: 15px;
+  margin-bottom: 25px;
   border-radius: 6px;
 }
-</style>
-  
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>  
 
+/* --- メッセージ一覧 --- */
+.msg-item {
+  border-bottom: 1px solid #444;
+  padding: 10px 0;
+}
+
+/* PNG保存用キャンバスは非表示でOK */
+#canvas {
+  display: none;
+}
+</style>
 </head>
 
 <body>
 
-<h2>管理者ページ（メッセージ一覧＋拍手数）</h2>
+<h1>📊 管理画面（拍手・訪問・メッセージ）</h1>
 
-<p>パスワードを入力してください</p>
-<input type="password" id="pwInput">
-<button id="pwBtn">OK</button>
 
-<div id="content">
-  <h3>📬 直近1か月のメッセージ一覧</h3>
-  <div id="messages"></div>
-
-  <h3>👏 拍手数</h3>
-  <p id="clapCount">読み込み中…</p>
+<!-- ■■■ 拍手 & 訪問数表示 ■■■ -->
+<div class="box">
+  <h2>📈 今日のカウント</h2>
+  <p>本日の訪問数：<span id="visitToday">0</span></p>
+  <p>本日の拍手数：<span id="clapToday">0</span></p>
 </div>
 
+
+<!-- ■■■ メッセージ一覧 ■■■ -->
+<div class="box">
+  <h2>💬 メッセージ一覧</h2>
+  <div id="messageList"></div>
+</div>
+
+
+<!-- PNG 保存のためのキャンバス -->
+<canvas id="canvas"></canvas>
+
+
+<!-- Firebase SDK -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, doc, getDoc, query, where, Timestamp }
-    from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import { 
+  getFirestore, collection, getDocs, doc, getDoc 
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
-    authDomain: "kado-onyx-clap.firebaseapp.com",
-    projectId: "kado-onyx-clap",
-    storageBucket: "kado-onyx-clap.firebasestorage.app",
-    messagingSenderId: "1038961543704",
-    appId: "1:1038961543704:web:114b43697f055c2f8f116d",
-    measurementId: "G-DH6JB7CKPV"
-  };
+// --- Firebase設定 ---
+const firebaseConfig = {
+  apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
+  authDomain: "kado-onyx-clap.firebaseapp.com",
+  projectId: "kado-onyx-clap",
+  storageBucket: "kado-onyx-clap.firebasestorage.app",
+  messagingSenderId: "1038961543704",
+  appId: "1:1038961543704:web:114b43697f055c2f8f116d"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  // ▼ パスワードチェック
-  function checkPW() {
-    const input = document.getElementById("pwInput").value;
-    const correct = "onyx123";
 
-    if (input === correct) {
-      document.getElementById("content").style.display = "block";
-      loadData();
-    } else {
-      alert("パスワードが違います");
-    }
+// ----------------------------
+// 今日の訪問数・拍手数を取得
+// ----------------------------
+async function loadCounts() {
+  const today = new Date().toISOString().slice(0,10);
+  const ref = doc(db, "daily", today);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data();
+    document.getElementById("visitToday").textContent = data.visits ?? 0;
+    document.getElementById("clapToday").textContent = data.claps ?? 0;
   }
-
-  document.getElementById("pwBtn").onclick = checkPW;
-
-  // ▼ データ読み込み（メッセージ + 拍手）
-  async function loadData() {
-
-    // ▼ 直近1か月
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-
-    const q = query(
-      collection(db, "messages"),
-      where("timestamp", ">=", Timestamp.fromDate(oneMonthAgo))
-    );
-
-    const querySnapshot = await getDocs(q);
-
-    const msgBox = document.getElementById("messages");
-    msgBox.innerHTML = "";
-
-    querySnapshot.forEach(doc => {
-      const d = doc.data();
-      const date = d.timestamp.toDate().toLocaleString("ja-JP");
-      
-     msgBox.innerHTML += `
-  <div class="message-box" id="msg-${doc.id}">
-    <strong>📅 ${date}</strong><br>
-    ${d.text}
-    <br><br>
-    <button onclick="savePNG('msg-${doc.id}', '${date}')">🖼 PNG保存</button>
-  </div>
-      `;
-    });
-
-    if (querySnapshot.empty) {
-      msgBox.innerHTML = "<p>メッセージはありません。</p>";
-    }
-
-    // ▼ 拍手数
-    const clapSnap = await getDoc(doc(db, "claps", "main"));
-    if (clapSnap.exists()) {
-      document.getElementById("clapCount").textContent =
-        clapSnap.data().count + " 回";
-    } else {
-      document.getElementById("clapCount").textContent = "0 回";
-    }
-  }
-
-</script>
-<script>
-// =============================
-// PNG 生成用（frame.png 使用）
-// =============================
-async function saveMessageAsPng(dateStr, messageText) {
-    const frameImg = new Image();
-    frameImg.src = "frame.png"; // 320×128 の画像
-    await frameImg.decode();
-
-    const baseWidth = 320;
-    const frameHeight = frameImg.height; // 128px
-
-    // キャンバス作成（まずは最低サイズ）
-    let canvas = document.createElement("canvas");
-    canvas.width = baseWidth;
-    canvas.height = frameHeight;
-    let ctx = canvas.getContext("2d");
-
-    // アンチエイリアスをOFF（ドット感を残す）
-    ctx.imageSmoothingEnabled = false;
-
-    // --- 基本のフレーム描画 ---
-    ctx.drawImage(frameImg, 0, 0);
-
-    // --- フォント設定（ドット調・アンチエイリアスなし）---
-    ctx.font = "12px sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.textBaseline = "top";
-
-    // ---- 日付 ----
-    const dateX = 21;
-    const dateY = 32;
-    ctx.fillText(dateStr, dateX, dateY);
-
-    // ---- メッセージ ----
-    const msgX = 21;
-    let msgY = dateY + 18; // 日付の下から書き始める
-
-    const maxWidth = 320 - 40; // 左右21px くらいの余白確保
-
-    // 行分割処理
-    const lines = wrapText(ctx, messageText, maxWidth);
-
-    // 必要な高さを計算（行数によって可変）
-    const lineHeight = 16; // 12pxフォント × 行間
-    const neededHeight = msgY + lines.length * lineHeight + 20;
-
-    if (neededHeight > frameHeight) {
-        // キャンバスを伸ばす（下方向）
-        const newCanvas = document.createElement("canvas");
-        newCanvas.width = baseWidth;
-        newCanvas.height = neededHeight;
-        const newCtx = newCanvas.getContext("2d");
-        newCtx.imageSmoothingEnabled = false;
-
-        // 上部フレームを描画
-        newCtx.drawImage(canvas, 0, 0);
-
-        // 下部スペースを黒背景で塗りつぶし
-        newCtx.fillStyle = "#000000";
-        newCtx.fillRect(0, frameHeight, baseWidth, neededHeight - frameHeight);
-
-        ctx = newCtx;
-        canvas = newCanvas;
-    }
-
-    // メッセージ描画
-    lines.forEach(line => {
-        ctx.fillText(line, msgX, msgY);
-        msgY += lineHeight;
-    });
-
-    // PNG保存
-    const link = document.createElement("a");
-    link.download = `${dateStr.replace(/\//g,"-")}_message.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
 }
 
-// =============================
-// 行分割（折り返し）
-// =============================
+
+// ----------------------------
+// メッセージ一覧を表示
+// ----------------------------
+async function loadMessages() {
+  const msgBox = document.getElementById("messageList");
+  msgBox.innerHTML = "";
+
+  const querySnapshot = await getDocs(collection(db, "messages"));
+  let list = [];
+
+  querySnapshot.forEach(doc => {
+    const d = doc.data();
+    list.push({
+      text: d.text,
+      time: d.timestamp ? d.timestamp.toDate() : new Date(0)
+    });
+  });
+
+  // 新しい順
+  list.sort((a,b) => b.time - a.time);
+
+  list.forEach(msg => {
+    const div = document.createElement("div");
+    div.className = "msg-item";
+
+    const dateStr = msg.time.toLocaleString("ja-JP");
+
+    div.innerHTML = `
+      <div><b>${dateStr}</b></div>
+      <div>${msg.text}</div>
+      <button onclick="savePNG('${dateStr.replace(/[- :]/g,'_')}', \`${msg.text}\`)">PNG保存</button>
+    `;
+
+    msgBox.appendChild(div);
+  });
+}
+
+
+// ----------------------------
+// PNG生成処理（frame.png + 文字）
+// ----------------------------
+window.savePNG = async function(dateStr, message) {
+  const frame = new Image();
+  frame.src = "frame.png";
+
+  await frame.decode(); // 読み込み
+
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  // 基本サイズ
+  const width = 320;
+  let height = 128; // 基本サイズ
+
+  // メッセージの文字折り返し
+  ctx.font = "12px monospace";
+  const lines = wrapText(ctx, message, 280);
+  height = 80 + lines.length * 16;  // 高さ調整
+
+  canvas.width = width;
+  canvas.height = height;
+
+  // 黒背景
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,width,height);
+
+  // フレーム描画（上に固定）
+  ctx.drawImage(frame, 0, 0, width, 128);
+
+  // 日付
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px monospace";
+  ctx.fillText(dateStr, 21, 32);
+
+  // メッセージ（折り返し）
+  let y = 60;
+  for (let line of lines) {
+    ctx.fillText(line, 21, y);
+    y += 16;
+  }
+
+  // 保存
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = `${dateStr}_message.png`;
+  a.click();
+};
+
+
+// 文字折り返しヘルパー
 function wrapText(ctx, text, maxWidth) {
-    const words = text.split("");
-    let line = "";
-    let lines = [];
+  const words = text.split("");
+  let lines = [];
+  let current = "";
 
-    for (let char of words) {
-        const test = line + char;
-        if (ctx.measureText(test).width > maxWidth) {
-            lines.push(line);
-            line = char;
-        } else {
-            line = test;
-        }
+  for (let ch of words) {
+    if (ctx.measureText(current + ch).width > maxWidth) {
+      lines.push(current);
+      current = ch;
+    } else {
+      current += ch;
     }
-    if (line) lines.push(line);
-    return lines;
-}
-</script>
+  }
+  if (current) lines.push(current);
 
+  return lines;
+}
+
+
+// 初期ロード
+loadCounts();
+loadMessages();
+</script>
 
 </body>
 </html>
