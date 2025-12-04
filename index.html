@@ -16,14 +16,11 @@ body {
   text-align: center;
   color: #fff;
 }
-h2 { margin-top: 0; color:#000; }
-
 #image-box img {
   max-width: 90%;
   margin: 20px auto;
   display: block;
 }
-
 textarea {
   width: 50%;
   height: 80px;
@@ -34,7 +31,6 @@ textarea {
   font-size: 16px;
   resize: vertical;
 }
-
 button {
   padding: 12px 22px;
   margin-top: 10px;
@@ -45,13 +41,11 @@ button {
   cursor: pointer;
   color: #fff;
 }
-
 #page-num {
   margin-top: 10px;
   font-size: 18px;
   color: #000;
 }
-
 .footer-copy {
   color: #000;
   margin-top: 30px;
@@ -62,7 +56,7 @@ button {
 
 <body>
 
-<h2>💀拍手ありがとうございます👹</h2>
+<h2 style="color:#000;">💀拍手ありがとうございます👹</h2>
 
 <div id="image-box">
   <img id="main-image" src="1_v2.gif" alt="お礼画像">
@@ -75,177 +69,109 @@ button {
 
 <p class="footer-copy">© 2021 yawaraka_doku_onyx All Rights Reserved.</p>
 
-<!-- Firebase SDK -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import {
-    getFirestore, doc, getDoc, setDoc, updateDoc,
-    collection, addDoc, serverTimestamp, increment
-  } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import { 
+  getFirestore, doc, getDoc, setDoc, updateDoc, 
+  collection, addDoc, serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-  // --- Firebase設定 ---
-  const firebaseConfig = {
-    apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
-    authDomain: "kado-onyx-clap.firebaseapp.com",
-    projectId: "kado-onyx-clap",
-    storageBucket: "kado-onyx-clap.firebasestorage.app",
-    messagingSenderId: "1038961543704",
-    appId: "1:1038961543704:web:114b43697f055c2f8f116d",
-    measurementId: "G-DH6JB7CKPV"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyC74BiEEMF1D8C7Ll99kWBJE5UqTC8T8Hw",
+  authDomain: "kado-onyx-clap.firebaseapp.com",
+  projectId: "kado-onyx-clap",
+  storageBucket: "kado-onyx-clap.firebasestorage.app",
+  messagingSenderId: "1038961543704",
+  appId: "1:1038961543704:web:114b43697f055c2f8f116d",
+  measurementId: "G-DH6JB7CKPV"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  // ============================================================
-  // (A) 日付キー・時間キー作成（C案）
-  // ============================================================
-  function getTodayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${("0"+(d.getMonth()+1)).slice(-2)}-${("0"+d.getDate()).slice(-2)}`;
+// -----------------------------
+// ページ訪問カウント
+// -----------------------------
+async function addVisit() {
+  const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  const ref = doc(db, "visits", today);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, { count: (snap.data().count || 0) + 1 });
+  } else {
+    await setDoc(ref, { count: 1 });
   }
-  function getCurrentHour() {
-    return new Date().getHours().toString();
-  }
+}
+addVisit();
 
-  // ============================================================
-  // (B) 拍手の時間別集計保存
-  // ============================================================
-  async function addClapHourly() {
-    const today = getTodayKey();
-    const hour = getCurrentHour();
+// -----------------------------
+// お礼画像
+// -----------------------------
+const images = ["1_v2.gif","2.png","3.png","4.png"];
+let idx = 0;
 
-    const ref = doc(db, "clap_stats", today);
-    const snap = await getDoc(ref);
+function updateImage() {
+  document.getElementById("main-image").src = images[idx];
+  document.getElementById("page-num").textContent = `(${idx+1}/${images.length})`;
+}
 
-    if (!snap.exists()) {
-      const base = {};
-      for (let i = 0; i < 24; i++) base[i] = 0;
-
-      await setDoc(ref, {
-        ...base,
-        total: 1,
-        [hour]: 1
-      });
-    } else {
-      await updateDoc(ref, {
-        total: increment(1),
-        [hour]: increment(1)
-      });
-    }
-  }
-
-  // ============================================================
-  // (C) 訪問の時間別集計保存（ページ読み込み時）
-  // ============================================================
-  async function addVisitHourly() {
-    const today = getTodayKey();
-    const hour = getCurrentHour();
-
-    const ref = doc(db, "visit_stats", today);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-      const base = {};
-      for (let i = 0; i < 24; i++) base[i] = 0;
-      await setDoc(ref, {
-        ...base,
-        total: 1,
-        [hour]: 1
-      });
-    } else {
-      await updateDoc(ref, {
-        total: increment(1),
-        [hour]: increment(1)
-      });
-    }
-  }
-
-  // ページ訪問時カウント
-  addVisitHourly();
-
-  // ============================================================
-  // (D) お礼画像（ページ送り）
-  // ============================================================
-  const images = ["1_v2.gif","2.png","3.png","4.png"];
-  let idx = 0;
-
-  function updateImage() {
-    document.getElementById("main-image").src = images[idx];
-    document.getElementById("page-num").textContent = `(${idx+1}/${images.length})`;
-  }
-
-  function nextImage() {
-    idx = (idx + 1) % images.length;
-    updateImage();
-  }
-
-  // ============================================================
-  // (E) 拍手カウント（総数）
-  // ============================================================
-  const clapDocRef = doc(db, "claps", "main");
-
-  async function addClapToFirebase() {
-    const snap = await getDoc(clapDocRef);
-    if (snap.exists()) {
-      await updateDoc(clapDocRef, { count: (snap.data().count || 0) + 1 });
-    } else {
-      await setDoc(clapDocRef, { count: 1 });
-    }
-  }
-
-  // ============================================================
-  // (F) 連打制御（15回まで即時OK）
-  // ============================================================
-  let rapidClicks = 0;
-  const maxRapid = 15;
-
-  function canClapNow() {
-    if (rapidClicks < maxRapid) {
-      rapidClicks++;
-      setTimeout(() => {
-        rapidClicks = Math.max(0, rapidClicks - 1);
-      }, 60000);
-      return true;
-    }
-    return false;
-  }
-
-  // ============================================================
-  // (G) メイン処理（送信ボタン）
-  // ============================================================
-  document.getElementById("sendClapBtn").addEventListener("click", async () => {
-
-    if (!canClapNow()) {
-      alert("おちついてください");
-      return;
-    }
-
-    const text = document.getElementById("message").value.trim();
-
-    // メッセージ保存
-    if (text) {
-      await addDoc(collection(db, "messages"), {
-        text: text,
-        timestamp: serverTimestamp()
-      });
-    }
-
-    // 拍手の総数 +1
-    await addClapToFirebase();
-
-    // 拍手を時間別 +1
-    await addClapHourly();
-
-    nextImage();
-    document.getElementById("message").value = "";
-  });
-
-  // 画像クリックでもページ送り
-  document.getElementById("main-image").addEventListener("click", nextImage);
-
-  // 初期表示
+function nextImage() {
+  idx = (idx + 1) % images.length;
   updateImage();
+}
+
+// -----------------------------
+// 拍手
+// -----------------------------
+const clapRef = doc(db, "claps", "main");
+
+async function addClap() {
+  const snap = await getDoc(clapRef);
+  if (snap.exists()) {
+    await updateDoc(clapRef, { count: (snap.data().count || 0) + 1 });
+  } else {
+    await setDoc(clapRef, { count: 1 });
+  }
+}
+
+// -----------------------------
+// 連打防止（15回まで即時）
+// -----------------------------
+let rapid = 0;
+const maxRapid = 15;
+
+function canClap() {
+  if (rapid < maxRapid) {
+    rapid++;
+    setTimeout(() => rapid = Math.max(0, rapid - 1), 60000);
+    return true;
+  }
+  return false;
+}
+
+// -----------------------------
+document.getElementById("sendClapBtn").addEventListener("click", async () => {
+  if (!canClap()) {
+    alert("おちついてください");
+    return;
+  }
+
+  const text = document.getElementById("message").value.trim();
+  if (text) {
+    await addDoc(collection(db,"messages"), {
+      text: text,
+      timestamp: serverTimestamp()
+    });
+  }
+
+  await addClap();
+  nextImage();
+  document.getElementById("message").value = "";
+});
+
+document.getElementById("main-image").addEventListener("click", nextImage);
+
+updateImage();
 </script>
 </body>
 </html>
